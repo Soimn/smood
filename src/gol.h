@@ -13,179 +13,122 @@ Sqrt(f32 n)
 f32
 Exp(f32 n)
 {
-  return (Float_Bits){ .bits = _mm_extract_ps(_mm_exp_ps(_mm_set1_ps(n)), 0) }.f
+  return (Float_Bits){ .bits = _mm_extract_ps(_mm_exp_ps(_mm_set1_ps(n)), 0) }.f;
 }
 
-// NOTE: modified to read float cell values
-void
-ConwayStep(f32* old_grid, f32* new_grid, u32 grid_width, u32 grid_height)
+f32
+Sigma1(f32 x, f32 a, f32 alpha)
 {
-  for (umm y = 0; y < grid_height; ++y)
-  {
-    for (umm x = 0; x < grid_width; ++x)
-    {
-      u32 alive_neighbours = 0;
-
-      for (umm ny = (umm)MAX(0, (imm)y - 1); ny < MIN(grid_height, y + 2); ++ny)
-      {
-        for (umm nx = (umm)MAX(0, (imm)x - 1); nx < MIN(grid_width, x + 2); ++nx)
-        {
-          alive_neighbours += (old_grid[ny*grid_width + nx] > 0.5f);
-        }
-      }
-
-      bool cell_is_alive = (old_grid[y*grid_width + x] > 0.5f);
-      alive_neighbours -= cell_is_alive;
-
-      if (cell_is_alive && alive_neighbours == 2 || alive_neighbours == 3) new_grid[y*grid_width + x] = 1;
-      else                                                                 new_grid[y*grid_width + x] = 0;
-    }
-  }
+  return 1 / (1 + Exp(-(x-a)*(4/alpha)));
 }
 
-u32
-CellValueToColor(f32 value)
+f32
+Sigma2(f32 x, f32 a, f32 b, f32 alpha)
 {
-  u32 r = (u32)CLAMP(value*255, 0, 255);
-  return 0xFF000000 | (r << 16) | (r << 8) | r;
+  return Sigma1(x, a, alpha)*(1 - Sigma1(x, b, alpha));
 }
 
-void
-BlockCopy(f32* grid, u32 grid_width, u32 grid_height, f32* block, u32 x, u32 y, u32 width, u32 height)
+f32
+SigmaM(f32 x, f32 y, f32 m, f32 alpha)
 {
-  for (u32 dy = 0; dy < height; ++dy)
-  {
-    for (u32 dx = 0; dx < width; ++dx)
-    {
-      grid[(y+dy)*grid_width + (x+dx)] = block[dy*width + dx];
-    }
-  }
+  return x*(1 - Sigma1(m, 0.5f, alpha)) + y*Sigma1(m, 0.5f, alpha);
 }
 
-void
-ConwayPulsar(f32* grid, u32 grid_width, u32 grid_height, u32 x, u32 y)
+f32
+S(f32 n, f32 m, f32 alpha, f32 b1, f32 b2, f32 d1, f32 d2)
 {
-  u32 block_size = 15;
-  f32 block[15*15] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0,
-    0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0,
-    0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0,
-    0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0,
-    0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0,
-    0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0,
-    0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-  };
-
-  BlockCopy(grid, grid_width, grid_height, block, x - block_size, y - block_size, block_size, block_size);
-}
-
-typedef struct Smooth_Params
-{
-  float alpha;
-  float ri, ra;
-  float b;
-  float b1, b2;
-  float d1, d2;
-} Smooth_Params;
-
-static f32
-Sigma1(Smooth_Params params, f32 x, f32 a)
-{
-  return 1 / (1 + Exp(-(x - a)*(4/params.alpha));
-}
-
-static f32
-Sigma2(Smooth_Params params, f32 x, f32 a, f32 b)
-{
-  return Sigma1(params, x, a) * (1 - Sigma1(params, x, b));
-}
-
-static f32
-SigmaM(Smooth_Params params, f32 x, f32 y, f32 m)
-{
-  return x*(1 - Sigma1(params, m, 0.5f)) + y*Sigma1(params, m, 0.5f);
-}
-
-static f32
-S(Smooth_Params params, f32 n, f32 m)
-{
-  return Sigma2(params, n, SigmaM(params, params.b1, params.d1, m), SigmaM(params, params.b2, params.d2, m));
-}
-
-static f32
-M(Smooth_Params params, f32* grid, u32 grid_width, u32 grid_height, u32 x, u32 y)
-{
-  f32 acc = 0;
-  imm r = (imm)(params.ri + params.b + 0.5f);
-  for (imm dy = -r; dy <= r; ++dy)
-  {
-    for (imm dx = -r; dx <= r; ++dx)
-    {
-      umm gx = (x + dx + grid_width)  % grid_width;
-      umm gy = (y + dy + grid_height) % grid_height;
-
-      f32 cell_value = grid[gy*grid_width + gx];
-
-      float l = Sqrt((f32)(dx*dx + dy*dy));
-      if      (l <  params.ri - (f32)params.b/2) acc += cell_value;
-      else if (l <= params.ri + (f32)params.b/2) acc += cell_value * (f32)(params.ri + (f32)params.b/2 - l)/params.b;
-    }
-  }
-
-  return acc / (PI32 * params.ri * params.ri);
-}
-
-static f32
-N(Smooth_Params params, f32* grid, u32 grid_width, u32 grid_height, u32 x, u32 y)
-{
-  f32 acc = 0;
-  imm r = (imm)(params.ri + params.b + 0.5f);
-  for (imm dy = -r; dy <= r; ++dy)
-  {
-    for (imm dx = -r; dx <= r; ++dx)
-    {
-      umm gx = (x + dx + grid_width)  % grid_width;
-      umm gy = (y + dy + grid_height) % grid_height;
-
-      f32 cell_value = grid[gy*grid_width + gx];
-
-      float l = Sqrt((f32)(dx*dx + dy*dy));
-      if      (l <  params.ri - (f32)params.b/2) acc += cell_value;
-      else if (l <= params.ri + (f32)params.b/2) acc += cell_value * (f32)(params.ri + (f32)params.b/2 - l)/params.b;
-    }
-  }
-
-  return acc / (PI32 * params.ri * params.ri);
+  return Sigma2(n, SigmaM(b1, d1, m, alpha), SigmaM(b2, d2, m, alpha), alpha);
 }
 
 void
 Init(f32* grid, u32 grid_width, u32 grid_height)
 {
-  ConwayPulsar(grid, grid_width, grid_height, grid_width/2, grid_height/2);
+  for (u32 y = 0; y <= grid_height; ++y)
+  {
+    for (u32 x = 0; x <= grid_width; ++x)
+    {
+      u32 random_u32;
+      while (!_rdrand32_step(&random_u32));
+
+      f32 rand_unit_f32 = (Float_Bits){ .bits = (127 << 23) | (random_u32 >> 9) }.f - 1;
+
+      grid[y*grid_width + x] = rand_unit_f32;
+    }
+  }
 }
 
 void
 Tick(u32* screen, u32 screen_width, u32 screen_height, f32* old_grid, f32* new_grid, u32 grid_width, u32 grid_height)
 {
-  ConwayStep(old_grid, new_grid, grid_width, grid_height);
+  imm r_i       = 7;
+  imm r_a       = 21;
+  float b1      = 0.278f;
+  float b2      = 0.365f;
+  float d1      = 0.267f;
+  float d2      = 0.445f;
+  float alpha_n = 0.028f;
+  float alpha_m = 0.0147f;
+  float dt      = 0.1667f;
+
+  for (imm y = 0; y < grid_height; ++y)
+  {
+    for (imm x = 0; x < grid_width; ++x)
+    {
+      f32 m = 0;
+      u32 M = 0;
+      f32 n = 0;
+      u32 N = 0;
+
+      imm padded_radius = (imm)(r_a + 1);
+      for (imm dy = -padded_radius; dy <= padded_radius; ++dy)
+      {
+        for (imm dx = -padded_radius; dx <= padded_radius; ++dx)
+        {
+          u32 wrapped_y  = (u32)(y+dy+grid_height)%grid_height;
+          u32 wrapped_x  = (u32)(x+dx+grid_width) %grid_width;
+          f32 f          = old_grid[wrapped_y*grid_width + wrapped_x];
+
+          imm l_sq = dx*dx + dy*dy;
+
+          if (l_sq < r_i)
+          {
+            m += f;
+            M += 1;
+          }
+          else if (l_sq < r_a)
+          {
+            n += f;
+            N += 1;
+          }
+        }
+      }
+
+      m /= M;
+      n /= N;
+
+      // TODO: alpha
+      f32 s = 2*S(n, m, alpha_n, b1, b2, d1, d2) - 1;
+
+      f32 f     = old_grid[y*grid_width + x];
+      f32 df_dt = s*f;
+
+      new_grid[y*grid_width + x] = f + df_dt*dt;
+    }
+  }
 
   // TODO: up or down scale, maybe?
+  u32 grid_cell_pixel_size = 8;
   for (u32 y = 0; y < screen_height; ++y)
   {
     for (u32 x = 0; x < screen_width; ++x)
     {
-      u32 color = CellValueToColor(new_grid[(y/4)*grid_width + (x/4)]);
-      for (u32 uy = y; uy < MIN(screen_height, y + 4); ++uy)
+      f32 value = new_grid[(y/grid_cell_pixel_size)*grid_width + (x/grid_cell_pixel_size)];
+
+      u32 r = (u32)CLAMP(value*255, 0, 255);
+      u32 color = 0xFF000000 | (r << 16) | (r << 8) | (r);
+      for (u32 uy = y; uy < MIN(screen_height, y + grid_cell_pixel_size); ++uy)
       {
-        for (u32 ux = x; ux < MIN(screen_width, x + 4); ++ux)
+        for (u32 ux = x; ux < MIN(screen_width, x + grid_cell_pixel_size); ++ux)
         {
           screen[uy*screen_width + ux] = color;
         }

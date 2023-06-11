@@ -114,8 +114,8 @@ WinMainCRTStartup()
 
 			ShowWindow(window, SW_SHOW);
 
-      u32 grid_width  = screen_width / 4;
-      u32 grid_height = screen_height / 4;
+      u32 grid_width  = screen_width / 8;
+      u32 grid_height = screen_height / 8;
       f32* old_grid   = VirtualAlloc(0, (u64)grid_width*(u64)grid_height*sizeof(f32), MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
       f32* new_grid   = VirtualAlloc(0, (u64)grid_width*(u64)grid_height*sizeof(f32), MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
 
